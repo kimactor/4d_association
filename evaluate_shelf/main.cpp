@@ -6,8 +6,8 @@
 #include <json/json.h>
 
 
-// #define SAVE_RESULT
-#define RUN_OLD_VERSION
+#define SAVE_RESULT
+//#define RUN_OLD_VERSION
 
 
 Eigen::Matrix4Xf MappingToShelf(const Eigen::Matrix4Xf& skel19)
@@ -195,10 +195,16 @@ int main()
 
 		}
 
-		cv::imwrite("../output/detect/" + std::to_string(frameIdx) + ".jpg", detectImg);
-		cv::imwrite("../output/assoc/" + std::to_string(frameIdx) + ".jpg", assocImg);
-		cv::imwrite("../output/reproj/" + std::to_string(frameIdx) + ".jpg", reprojImg);
-		cv::imwrite("../output/gt/" + std::to_string(frameIdx) + ".jpg", gtImg);
+		//cv::imwrite("../output/detect/" + std::to_string(frameIdx) + ".jpg", detectImg);
+		//cv::imwrite("../output/assoc/" + std::to_string(frameIdx) + ".jpg", assocImg);
+		//cv::imwrite("../output/reproj/" + std::to_string(frameIdx) + ".jpg", reprojImg);
+		//cv::imwrite("../output/gt/" + std::to_string(frameIdx) + ".jpg", gtImg);
+
+		cv::imshow("detect", detectImg);
+		cv::imshow("assoc", assocImg);
+		cv::imshow("reproj", reprojImg);
+		cv::imshow("gt", gtImg);
+		cv::waitKey(1);
 #endif
 
 	}

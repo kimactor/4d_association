@@ -32,7 +32,7 @@ KruskalAssociater::KruskalAssociater(const SkelType& type, const std::map<std::s
 void KruskalAssociater::CalcBoneNodes()
 {
 	const SkelDef& def = GetSkelDef(m_type);
-#pragma omp parallel for
+//#pragma omp parallel for
 	for (int pafIdx = 0; pafIdx < def.pafSize; pafIdx++) {
 		const int jaIdx = def.pafDict(0, pafIdx);
 		const int jbIdx = def.pafDict(1, pafIdx);
@@ -110,6 +110,33 @@ void KruskalAssociater::CalcBoneTempEdges()
 		}
 	}
 }
+
+inline void printAvailNodes(int id, const std::vector<std::vector<std::list<int>>>& availNodes)
+{
+	std::cout << "--------------" << std::endl;
+	std::cout << "index: " << id <<  " AvaliNodes: " << std::endl;
+	for (int index = 0; index < availNodes.size(); ++index)
+	{
+		for (int view = 0; view < availNodes[index].size(); ++view)
+		{
+			std::cout << "(";
+			int list_id = 0;
+			for (auto& p1: availNodes[index][view])
+			{
+				std::cout << p1;
+				if (list_id % 2 == 0)
+				{
+					std::cout << " ";
+				}
+				list_id++;
+			}
+			std::cout << ")";
+		}
+		std::cout << std::endl;
+	}
+	std::cout << "--------------" << std::endl;
+
+}
    
          
 void KruskalAssociater::EnumCliques(std::vector<BoneClique>& cliques)
@@ -118,7 +145,7 @@ void KruskalAssociater::EnumCliques(std::vector<BoneClique>& cliques)
 	const SkelDef& def = GetSkelDef(m_type);
 
 	std::vector<std::vector<BoneClique>> tmpCliques(def.pafSize);
-#pragma omp parallel for
+//#pragma omp parallel for
 	for (int pafIdx = 0; pafIdx < def.pafSize; pafIdx++) {
 		const auto jIdxPair = def.pafDict.col(pafIdx);
 		const auto& nodes = m_boneNodes[pafIdx];
@@ -129,14 +156,16 @@ void KruskalAssociater::EnumCliques(std::vector<BoneClique>& cliques)
 		int index = -1;
 		while (true) {
 			if (index >= 0 && pick[index] >= int(availNodes[index][index].size())) {
+				std::cout << "current: " << index << " pick[index]: " << pick[index] << " availiNodes value: " << int(availNodes[index][index].size()) << std::endl;
 				pick[index] = -1;
 
 				if (--index < 0)
 					break;
-
 				pick[index]++;
+				std::cout << "update Pick: " << pick.transpose() << std::endl;
 			}
 			else if (index == pick.size() - 1) {
+				//当pick 中有不为-1 的值
 				if (-pick.head(m_cams.size()).sum() != m_cams.size()) {
 					BoneClique clique;
 					clique.pafIdx = pafIdx;
@@ -147,12 +176,13 @@ void KruskalAssociater::EnumCliques(std::vector<BoneClique>& cliques)
 
 					CalcCliqueScore(clique);
 					tmpCliques[pafIdx].emplace_back(clique);
+					std::cout << "emplace back clique: " << index << std::endl;
 				}
 				pick[index]++;
+				std::cout << "only execute index = 5 update Pick: " << pick.transpose() << std::endl;
 			}
 			else {
 				index++;
-
 				// update available nodes
 				if (index == 0) {
 					for (int view = 0; view < m_cams.size(); view++) {
@@ -162,36 +192,62 @@ void KruskalAssociater::EnumCliques(std::vector<BoneClique>& cliques)
 					}
 					for (int pIdx = 0; pIdx < m_skels3dPrev.size(); pIdx++)
 						availNodes[0].back().emplace_back(pIdx);
+
+					std::cout << "set value index = 0" << std::endl;
+					printAvailNodes(index, availNodes);
+
 				}
 				else {
 					// epipolar constrain
 					if (pick[index - 1] >= 0) {
+						std::cout << "epipolar constrain " <<  index << std::endl;
 						for (int view = index; view < m_cams.size(); view++) {
 							availNodes[index][view].clear();
+							printAvailNodes(index, availNodes);
 							const auto& epiEdges = m_boneEpiEdges[pafIdx][index - 1][view];
 							const int boneAIdx = *std::next(availNodes[index - 1][index - 1].begin(), pick[index - 1]);
+							std::cout << "boneAIdx: " << boneAIdx << std::endl;
 							const auto& asgnMap = m_assignMap[view];
 							for (const int& boneBIdx : availNodes[index - 1][view]) {
+								std::cout << "boneBIdx: " << boneBIdx << std::endl;
 								if (epiEdges(boneAIdx, boneBIdx) > FLT_EPSILON)
+								{
 									availNodes[index][view].emplace_back(boneBIdx);
+									printAvailNodes(index, availNodes);
+								}
+
+
 							}
 						}
 					}
 					else
+					{
 						for (int view = index; view < m_cams.size(); view++)
 							availNodes[index][view] = availNodes[index - 1][view];
-
+						std::cout << "set value index: " << index << std::endl;
+						printAvailNodes(index, availNodes);
+					}
 					// temporal constrain
 					if (pick[m_cams.size() - 1] >= 0) {
+						std::cout << " temporal constrain: " << index << std::endl;
 						availNodes[index].back().clear();
+						printAvailNodes(index, availNodes);
 						const auto& tempEdge = m_boneTempEdges[pafIdx][m_cams.size() - 1];
 						const int boneIdx = *std::next(availNodes[m_cams.size() - 1][m_cams.size() - 1].begin(), pick[m_cams.size() - 1]);
+						std::cout << " boneIdx: " << boneIdx << std::endl;
 						for (const int& pIdx : availNodes[index - 1].back())
 							if (tempEdge(pIdx, boneIdx) > FLT_EPSILON)
+							{
 								availNodes[index].back().emplace_back(pIdx);
+								printAvailNodes(index, availNodes);
+							}
 					}
 					else
+					{
 						availNodes[index].back() = availNodes[index - 1].back();
+						printAvailNodes(index, availNodes);
+					}
+
 				}
 			}
 		}
@@ -354,7 +410,7 @@ int KruskalAssociater::CheckPersonCompatibility(const int& masterIdx, const int&
 	return checkCnt;
 }
 
-
+// 检查人体兼容性
 int KruskalAssociater::CheckPersonCompatibility(const int& masterIdx, const int& slaveIdx)
 {
 	assert(masterIdx < slaveIdx);
@@ -766,23 +822,52 @@ void KruskalAssociater::DismemberPersons(std::vector<BoneClique>& cliques)
 
 void KruskalAssociater::SpanTree()
 {
+	clock_t init_t = clock();
+	// 初始化 m_assignMap 和m_personsMap
 	Initialize();
+	std::cout << " init use time: " << clock() - init_t << std::endl;
+
 	std::vector<BoneClique> cliques;
+	clock_t enum_t = clock();
 	EnumCliques(cliques);
+	std::cout << " enum use time: " << clock() - enum_t << std::endl;
+
+	clock_t empty_t = clock();
 	while (!cliques.empty())
 		AssignTopClique(cliques);
+	std::cout << " empty use time: " << clock() - empty_t << std::endl;
+
 }
 
 
 void KruskalAssociater::Associate()
 {
+	clock_t t_1 = clock();
 	CalcJointRays();
+	std::cout << " 1 use time: " << clock() - t_1 << std::endl;
+	clock_t t_2 = clock();
 	CalcPafEdges();
+	std::cout << " 2 use time: " << clock() - t_2 << std::endl;
+	clock_t t_3 = clock();
 	CalcEpiEdges();
+	std::cout << " 3 use time: " << clock() - t_3 << std::endl;
+	clock_t t_4 = clock();
+	//计算之前的三维骨架到现在的所有二维骨架射线的距离
 	CalcTempEdges();
+	std::cout << " 4 use time: " << clock() - t_4 << std::endl;
+	clock_t t_5 = clock();
 	CalcBoneNodes();
+	std::cout << " 5 use time: " << clock() - t_5 << std::endl;
+	clock_t t_6 = clock();
 	CalcBoneEpiEdges();
+	std::cout << " 6 use time: " << clock() - t_6 << std::endl;
+	clock_t t_7 = clock();
 	CalcBoneTempEdges();
-	SpanTree();
+	std::cout << " 7 use time: " << clock() - t_7 << std::endl;
+	clock_t t_8 = clock();
+	SpanTree();  // 需要重点关注的
+	std::cout << " 8 use time: " << clock() - t_8 << std::endl;
+	clock_t t_9 = clock();
 	CalcSkels2d();
+	std::cout << " 9 use time: " << clock() - t_9 << std::endl;
 }

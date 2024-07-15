@@ -1,6 +1,7 @@
 #include <opencv2/opencv.hpp>
 #include "skel_painter.h"
 #include "openpose.h"
+#include <fstream>
 
 
 OpenposeDetection::OpenposeDetection(const SkelType& _type)
@@ -170,21 +171,26 @@ std::vector<OpenposeDetection> ParseDetections(const std::string& filename)
 	for (OpenposeDetection& detection : detections) {
 		for (int jIdx = 0; jIdx < def.jointSize; jIdx++) {
 			int jSize;
-			fs >> jSize;
+			fs >> jSize; 
 			detection.joints[jIdx].resize(3, jSize);
 			for (int i = 0; i < 3; i++)
 				for (int j = 0; j < jSize; j++)
+				{
 					fs >> detection.joints[jIdx](i, j);
+				}
 		}
+
 		for (int pafIdx = 0; pafIdx < def.pafSize; pafIdx++) {
 			const int jAIdx = def.pafDict(0, pafIdx);
 			const int jBIdx = def.pafDict(1, pafIdx);
 			detection.pafs[pafIdx].resize(detection.joints[jAIdx].cols(), detection.joints[jBIdx].cols());
 			for (int i = 0; i < detection.pafs[pafIdx].rows(); i++)
 				for (int j = 0; j < detection.pafs[pafIdx].cols(); j++)
+				{
 					fs >> detection.pafs[pafIdx](i, j);
-
+				}
 			detection.pafs[pafIdx] = detection.pafs[pafIdx].array().pow(0.2f);
+
 		}
 	}
 	fs.close();

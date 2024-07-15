@@ -25,6 +25,7 @@ float Associater::Point2LineDist(const Eigen::Vector3f& pA, const Eigen::Vector3
 
 float Associater::Line2LineDist(const Eigen::Vector3f& pA, const Eigen::Vector3f& rayA, const Eigen::Vector3f& pB, const Eigen::Vector3f& rayB)
 {
+	// 点乘为0， 两向量垂直
 	if (std::abs(rayA.dot(rayB)) < 1e-5f)
 		return Point2LineDist(pA, pB, rayA);
 	else
@@ -72,6 +73,7 @@ void Associater::CalcPafEdges()
 			for (auto&& detection : m_detections) {
 				auto&& pafs = detection.pafs[pafIdx];
 				if (pafs.size() > 0) {
+					// rowwise.sum() 按行求和
 					Eigen::VectorXf rowFactor = pafs.rowwise().sum().transpose().cwiseMax(1.f);
 					Eigen::VectorXf colFactor = pafs.colwise().sum().cwiseMax(1.f);
 					for (int i = 0; i < rowFactor.size(); i++)
