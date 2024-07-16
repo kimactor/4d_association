@@ -22,7 +22,7 @@ int ReadFromSeqDataset()
 	const SkelDef& skelDef = GetSkelDef(SKEL19);
 	std::vector<std::map<int, Eigen::Matrix4Xf>> skels;
 
-	//#pragma omp parallel for
+	#pragma omp parallel for
 	for (int i = 0; i < cameras.size(); i++) {
 		auto iter = std::next(cameras.begin(), i);
 		videos[i] = cv::VideoCapture("../data/" + dataset + "/video/" + iter->first + ".mp4");
@@ -207,8 +207,8 @@ int run_test()
 
 int main()
 {
-	run_test();
-	//ReadFromSeqDataset();
+	//run_test();
+	ReadFromSeqDataset();
 
 
 

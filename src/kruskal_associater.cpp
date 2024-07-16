@@ -32,7 +32,7 @@ KruskalAssociater::KruskalAssociater(const SkelType& type, const std::map<std::s
 void KruskalAssociater::CalcBoneNodes()
 {
 	const SkelDef& def = GetSkelDef(m_type);
-//#pragma omp parallel for
+#pragma omp parallel for
 	for (int pafIdx = 0; pafIdx < def.pafSize; pafIdx++) {
 		const int jaIdx = def.pafDict(0, pafIdx);
 		const int jbIdx = def.pafDict(1, pafIdx);
@@ -65,17 +65,17 @@ void KruskalAssociater::CalcBoneEpiEdges()
 						const Eigen::Vector2i& nodeB = nodesB[boneBIdx];
 
 						Eigen::Vector2f epiDist;
-						Eigen::Matrix<float, 3, 2> normals;
+						//Eigen::Matrix<float, 3, 2> normals;
 						for (int i = 0; i < 2; i++) {
-							normals.col(i) = m_jointRays[viewA][jIdxPair[i]].col(nodeA[i]).cross(
-								m_jointRays[viewB][jIdxPair[i]].col(nodeB[i])).normalized();
+							//normals.col(i) = m_jointRays[viewA][jIdxPair[i]].col(nodeA[i]).cross(
+							//	m_jointRays[viewB][jIdxPair[i]].col(nodeB[i])).normalized();
 							epiDist[i] = m_epiEdges[jIdxPair[i]][viewA][viewB](nodeA[i], nodeB[i]);
 						}
 
 						if (epiDist.minCoeff() < 0.f)
 							continue;
 
-						const float cosine = fabsf(normals.col(0).dot(normals.col(1)));
+						//const float cosine = fabsf(normals.col(0).dot(normals.col(1)));
 						epi(boneAIdx, boneBIdx) = epiDist.mean();
 					}
 				}
@@ -124,7 +124,7 @@ inline void printAvailNodes(int id, const std::vector<std::vector<std::list<int>
 			for (auto& p1: availNodes[index][view])
 			{
 				std::cout << p1;
-				if (list_id % 2 == 0)
+				if (list_id != (availNodes[index][view].size() - 1))
 				{
 					std::cout << " ";
 				}
@@ -149,6 +149,7 @@ void KruskalAssociater::EnumCliques(std::vector<BoneClique>& cliques)
 	for (int pafIdx = 0; pafIdx < def.pafSize; pafIdx++) {
 		const auto jIdxPair = def.pafDict.col(pafIdx);
 		const auto& nodes = m_boneNodes[pafIdx];
+		// m_cams size 每个视图，另外一个保存已经生成的三维人体骨架
 		Eigen::VectorXi pick = -Eigen::VectorXi::Ones(m_cams.size() + 1);
 		std::vector<std::vector<std::list<int>>> availNodes(pick.size(), std::vector<std::list<int>>(pick.size()));
 
@@ -203,7 +204,7 @@ void KruskalAssociater::EnumCliques(std::vector<BoneClique>& cliques)
 						std::cout << "epipolar constrain " <<  index << std::endl;
 						for (int view = index; view < m_cams.size(); view++) {
 							availNodes[index][view].clear();
-							printAvailNodes(index, availNodes);
+							//printAvailNodes(index, availNodes);
 							const auto& epiEdges = m_boneEpiEdges[pafIdx][index - 1][view];
 							const int boneAIdx = *std::next(availNodes[index - 1][index - 1].begin(), pick[index - 1]);
 							std::cout << "boneAIdx: " << boneAIdx << std::endl;
@@ -213,7 +214,7 @@ void KruskalAssociater::EnumCliques(std::vector<BoneClique>& cliques)
 								if (epiEdges(boneAIdx, boneBIdx) > FLT_EPSILON)
 								{
 									availNodes[index][view].emplace_back(boneBIdx);
-									printAvailNodes(index, availNodes);
+									//printAvailNodes(index, availNodes);
 								}
 
 
@@ -231,7 +232,7 @@ void KruskalAssociater::EnumCliques(std::vector<BoneClique>& cliques)
 					if (pick[m_cams.size() - 1] >= 0) {
 						std::cout << " temporal constrain: " << index << std::endl;
 						availNodes[index].back().clear();
-						printAvailNodes(index, availNodes);
+						//printAvailNodes(index, availNodes);
 						const auto& tempEdge = m_boneTempEdges[pafIdx][m_cams.size() - 1];
 						const int boneIdx = *std::next(availNodes[m_cams.size() - 1][m_cams.size() - 1].begin(), pick[m_cams.size() - 1]);
 						std::cout << " boneIdx: " << boneIdx << std::endl;
@@ -239,13 +240,13 @@ void KruskalAssociater::EnumCliques(std::vector<BoneClique>& cliques)
 							if (tempEdge(pIdx, boneIdx) > FLT_EPSILON)
 							{
 								availNodes[index].back().emplace_back(pIdx);
-								printAvailNodes(index, availNodes);
+								//printAvailNodes(index, availNodes);
 							}
 					}
 					else
 					{
 						availNodes[index].back() = availNodes[index - 1].back();
-						printAvailNodes(index, availNodes);
+						//printAvailNodes(index, availNodes);
 					}
 
 				}
@@ -843,25 +844,31 @@ void KruskalAssociater::SpanTree()
 void KruskalAssociater::Associate()
 {
 	clock_t t_1 = clock();
+	// 计算所有的二维点的射线
 	CalcJointRays();
 	std::cout << " 1 use time: " << clock() - t_1 << std::endl;
 	clock_t t_2 = clock();
+	//归一化pafs 关节亲合度
 	CalcPafEdges();
 	std::cout << " 2 use time: " << clock() - t_2 << std::endl;
 	clock_t t_3 = clock();
+	// 计算所有对应关节的射线在不同视图中的距离，归一化后并保存在m_epiEdges中
 	CalcEpiEdges();
 	std::cout << " 3 use time: " << clock() - t_3 << std::endl;
 	clock_t t_4 = clock();
-	//计算之前的三维骨架到现在的所有二维骨架射线的距离
+	//计算之前的三维骨架到现在的所有二维骨架射线的距离，归一化后保存到m_tempEdges 中，用来tracking 
 	CalcTempEdges();
 	std::cout << " 4 use time: " << clock() - t_4 << std::endl;
 	clock_t t_5 = clock();
+	// 分别计算每个视图中，通过关节最小亲合度来组合关节BoneNodes, 并保存到m_boneNodes中，同一个视图
 	CalcBoneNodes();
 	std::cout << " 5 use time: " << clock() - t_5 << std::endl;
 	clock_t t_6 = clock();
+	// 夸视图，计算每一对关节boneNodes 通过查询m_epiEdges 找到射线平均距离。夸视图
 	CalcBoneEpiEdges();
 	std::cout << " 6 use time: " << clock() - t_6 << std::endl;
 	clock_t t_7 = clock();
+	// 计算之前的三维骨架BoneNodes 到当前现在骨架节点的平均距离
 	CalcBoneTempEdges();
 	std::cout << " 7 use time: " << clock() - t_7 << std::endl;
 	clock_t t_8 = clock();
